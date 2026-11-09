@@ -27,8 +27,14 @@
     </applicationListeners>
 
     <extensions defaultExtensionNs="com.intellij">
-        <applicationConfigurable instance="indent.rainbow.settings.IrConfigurable">
-            <configurable instance="indent.rainbow.settings.IrConfigurableAdvanced" />
+        <applicationConfigurable
+                id="indent.rainbow.settings.IrConfigurable"
+                displayName="Indent Rainbow"
+                instance="indent.rainbow.settings.IrConfigurable">
+            <configurable
+                    id="indent.rainbow.settings.IrConfigurableAdvanced"
+                    displayName="Advanced Settings"
+                    instance="indent.rainbow.settings.IrConfigurableAdvanced" />
         </applicationConfigurable>
 
         <postStartupActivity implementation="indent.rainbow.IrPostStartupActivity" />
