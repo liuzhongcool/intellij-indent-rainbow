@@ -44,11 +44,15 @@ class LineIndentsCalculator(private val file: PsiFile, private val document: Doc
             LineIndents(indents, 1)
         } else {
             val fileText = document.charsSequence
-            val indents = tabsAndSpaces.mapToIntArray {
-                val isCorrectLine = it.tabs == 0 && it.spaces == it.totalIndent
-                        && (it.spaces % indentSize == 0 || shouldIgnoreLine(it, fileText))
+            val tabSize = indentOptions.TAB_SIZE.ifNotPositive { 4 }
+            val indents = IntArray(tabsAndSpaces.size) { line ->
+                val info = tabsAndSpaces[line]
+                val isCorrectLine = info.tabs == 0 && info.spaces == info.totalIndent
+                        && (info.spaces % indentSize == 0
+                        || shouldIgnoreLine(info, fileText)
+                        || isAlignedWithNotClosedLeftBracket(line, info.spaces, fileText, tabSize))
                 if (isCorrectLine || disableErrorHighlighting) {
-                    it.spaces / indentSize
+                    info.spaces / indentSize
                 } else {
                     -1
                 }
@@ -60,6 +64,54 @@ class LineIndentsCalculator(private val file: PsiFile, private val document: Doc
     private fun shouldIgnoreLine(info: LineIndentInfo, fileText: CharSequence): Boolean {
         val lineText = fileText.subSequence(info.startOffset + info.totalIndent, fileText.length)
         return ignoreLinesStartingWith.matcher(lineText).lookingAt()
+    }
+
+    /**
+     * Consider code:
+     * ```java
+     * foo(argument1,
+     *     argument2)
+     * ```
+     * Indentation of `argument2` is not a multiple of `indentSize`, but it is a valid continuation indent,
+     * because it is aligned with the first character after the not closed `(`.
+     */
+    private fun isAlignedWithNotClosedLeftBracket(
+        line: Int,
+        spaces: Int,
+        fileText: CharSequence,
+        tabSize: Int,
+    ): Boolean {
+        var bracketsBalance = 0
+        var previousLine = line
+        var scannedLines = 0
+        // This is a heuristic: brackets inside strings and comments are taken into account as well,
+        // but an indentation that exactly matches such a bracket is unlikely
+        while (previousLine > 0 && scannedLines < MAX_LOOKBACK_LINES) {
+            --previousLine
+            ++scannedLines
+            val lineStart = document.getLineStartOffset(previousLine)
+            val lineEnd = document.getLineEndOffset(previousLine)
+            for (offset in lineEnd - 1 downTo lineStart) {
+                when (fileText[offset]) {
+                    ')' -> ++bracketsBalance
+                    '(' -> if (bracketsBalance == 0) {
+                        if (spaces == visualColumn(fileText, lineStart, offset, tabSize) + 1) return true
+                    } else {
+                        --bracketsBalance
+                    }
+                }
+            }
+        }
+        return false
+    }
+
+    /** Returns column of [offset] with tabs expanded to [tabSize]. */
+    private fun visualColumn(fileText: CharSequence, lineStart: Int, offset: Int, tabSize: Int): Int {
+        var column = 0
+        for (index in lineStart until offset) {
+            column = if (fileText[index] == '\t') (column / tabSize + 1) * tabSize else column + 1
+        }
+        return column
     }
 
     private fun fillIndentsOnEmptyLines(indents: IntArray) {
@@ -85,6 +137,9 @@ class LineIndentsCalculator(private val file: PsiFile, private val document: Doc
     private fun getTabsAndSpaces(): Array<LineIndentInfo> =
         Array(document.lineCount) { line -> document.getNumberTabsAndSpaces(line) }
 }
+
+/** How many previous lines can be scanned when looking for a not closed left bracket. */
+private const val MAX_LOOKBACK_LINES = 100
 
 /** [totalIndent] can be greater then [tabs] + [spaces] if line contains mixed tabs/spaces */
 private data class LineIndentInfo(

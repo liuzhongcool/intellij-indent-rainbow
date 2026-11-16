@@ -2,6 +2,7 @@
 - Fixed `No display name specified in plugin descriptor XML file` exception when opening Settings
 - Fixed plugin icon in 2023.2
 - Enhanced user experience by improving the language of the opacity slider. Renamed "Less Opacity"/"More Opacity" to "Transparent"/"Opaque" (thanks [@bv-torrent](https://github.com/bv-torrent)!)
+- Fixed false "incorrect indentation" highlighting for continuation lines whose indent is aligned with a left bracket (e.g. method arguments aligned with `(`)
 
 ## 2.1.0
 - Add option to make edges round
